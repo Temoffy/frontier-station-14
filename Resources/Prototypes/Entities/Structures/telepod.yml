@@ -32,6 +32,13 @@
           Yellow: {state: "maint_unlit"}
   - type: Physics
     bodyType: Static
+  - type: ActivatableUI
+    key: enum.TelepodUiKey.Key
+  - type: ActivatableUIRequiresPower
+  - type: UserInterface
+    interfaces:
+      enum.TelepodUiKey.Key:
+        type: TelepodBoundUi
   - type: Construction
     graph: Machine
     node: machine
@@ -69,6 +76,11 @@
   - type: EmptyOnMachineDeconstruct
     containers:
     - scanner-bodyContainer
+  - type: DeviceNetworkRequiresPower
+  - type: DeviceNetwork
+    deviceNetId: Wireless
+    receiveFrequencyId: Telepod
+    transmitFrequencyId: Telepod
   - type: GuideHelp
     guides:
     - Cloning

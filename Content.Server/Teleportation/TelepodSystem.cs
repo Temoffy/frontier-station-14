@@ -3,7 +3,9 @@ using Content.Server.Teleportation;
 using Content.Shared.Destructible;
 using Content.Shared.ActionBlocker;
 using Content.Shared.DragDrop;
+using Content.Shared.UserInterface;
 using Content.Shared.Movement.Events;
+using Content.Shared.Teleportation.Systems;
 using Content.Shared.Verbs;
 using Robust.Shared.Containers;
 using Content.Server.Cloning.Components;
@@ -16,7 +18,9 @@ using Content.Shared.Climbing.Systems;
 using Content.Shared.Mobs.Components;
 using Content.Shared.Mobs.Systems;
 using Robust.Server.Containers;
-using static Content.Shared.Teleportation.Components.SharedTelepodComponent; // Hmm... //dunno what the hmm is about, it was there when I frankencoded this from the medscanner -Temoffy
+using Robust.Server.GameObjects;
+using static Content.Shared.Teleportation.Components.SharedTelepodComponent;
+using System.Reflection.PortableExecutable; // Hmm... //dunno what the hmm is about, it was there when I frankencoded this from the medscanner -Temoffy
 
 namespace Content.Server.Teleportation
 {
@@ -29,6 +33,7 @@ namespace Content.Server.Teleportation
         [Dependency] private readonly MobStateSystem _mobStateSystem = default!;
         [Dependency] private readonly ContainerSystem _containerSystem = default!;
         [Dependency] private readonly SharedAppearanceSystem _appearance = default!;
+        [Dependency] private readonly UserInterfaceSystem _userInterface = default!;
 
         private const float UpdateRate = 1f;
         private float _updateDif;
@@ -37,33 +42,28 @@ namespace Content.Server.Teleportation
         {
             base.Initialize();
 
+            //management
             SubscribeLocalEvent<TelepodComponent, ComponentInit>(OnComponentInit);
-            SubscribeLocalEvent<TelepodComponent, ContainerRelayMovementEntityEvent>(OnRelayMovement);
+            SubscribeLocalEvent<TelepodComponent, DestructionEventArgs>(OnDestroyed);
+
+            //In/out of machine
             SubscribeLocalEvent<TelepodComponent, GetVerbsEvent<InteractionVerb>>(AddInsertOtherVerb);
             SubscribeLocalEvent<TelepodComponent, GetVerbsEvent<AlternativeVerb>>(AddAlternativeVerbs);
-            SubscribeLocalEvent<TelepodComponent, DestructionEventArgs>(OnDestroyed);
             SubscribeLocalEvent<TelepodComponent, DragDropTargetEvent>(OnDragDropOn);
+            SubscribeLocalEvent<TelepodComponent, CanDropTargetEvent>(OnCanDragDropOn);
+            SubscribeLocalEvent<TelepodComponent, ContainerRelayMovementEntityEvent>(OnRelayMovement);
+
             //SubscribeLocalEvent<TelepodComponent, PortDisconnectedEvent>(OnPortDisconnected);
             //SubscribeLocalEvent<TelepodComponent, AnchorStateChangedEvent>(OnAnchorChanged);
             //SubscribeLocalEvent<TelepodComponent, RefreshPartsEvent>(OnRefreshParts);
             //SubscribeLocalEvent<TelepodComponent, UpgradeExamineEvent>(OnUpgradeExamine);
-            SubscribeLocalEvent<TelepodComponent, CanDropTargetEvent>(OnCanDragDropOn);
+
+            // UI
+            SubscribeLocalEvent<TelepodComponent, AfterActivatableUIOpenEvent>(OnToggleInterface);
         }
 
-        private void OnCanDragDropOn(EntityUid uid, TelepodComponent component, ref CanDropTargetEvent args)
-        {
-            args.Handled = true;
-            args.CanDrop |= CanScannerInsert(uid, args.Dragged, component);
-        }
-
-        public bool CanScannerInsert(EntityUid uid, EntityUid target, TelepodComponent? component = null)
-        {
-            if (!Resolve(uid, ref component))
-                return false;
-
-            return HasComp<BodyComponent>(target);
-        }
-
+        //section start
+        //component and machine management
         private void OnComponentInit(EntityUid uid, TelepodComponent scannerComponent, ComponentInit args)
         {
             base.Initialize();
@@ -71,14 +71,13 @@ namespace Content.Server.Teleportation
             //_signalSystem.EnsureSinkPorts(uid, TelepodComponent.ScannerPort);
         }
 
-        private void OnRelayMovement(EntityUid uid, TelepodComponent scannerComponent, ref ContainerRelayMovementEntityEvent args)
+        private void OnDestroyed(EntityUid uid, TelepodComponent scannerComponent, DestructionEventArgs args)
         {
-            if (!_blocker.CanInteract(args.Entity, uid))
-                return;
-
             EjectBody(uid, scannerComponent);
         }
 
+        //section start
+        //in and out of the machine
         private void AddInsertOtherVerb(EntityUid uid, TelepodComponent component, GetVerbsEvent<InteractionVerb> args)
         {
             if (args.Using == null ||
@@ -133,14 +132,59 @@ namespace Content.Server.Teleportation
             }
         }
 
-        private void OnDestroyed(EntityUid uid, TelepodComponent scannerComponent, DestructionEventArgs args)
+        private void OnCanDragDropOn(EntityUid uid, TelepodComponent component, ref CanDropTargetEvent args)
         {
+            args.Handled = true;
+            args.CanDrop |= CanScannerInsert(uid, args.Dragged, component);
+        }
+
+        public bool CanScannerInsert(EntityUid uid, EntityUid target, TelepodComponent? component = null)
+        {
+            if (!Resolve(uid, ref component))
+                return false;
+
+            return HasComp<BodyComponent>(target);
+        }
+
+        private void OnRelayMovement(EntityUid uid, TelepodComponent scannerComponent, ref ContainerRelayMovementEntityEvent args)
+        {
+            if (!_blocker.CanInteract(args.Entity, uid))
+                return;
+
             EjectBody(uid, scannerComponent);
         }
 
         private void OnDragDropOn(EntityUid uid, TelepodComponent scannerComponent, ref DragDropTargetEvent args)
         {
             InsertBody(uid, args.Dragged, scannerComponent);
+        }
+
+        public void InsertBody(EntityUid uid, EntityUid to_insert, TelepodComponent? scannerComponent)
+        {
+            if (!Resolve(uid, ref scannerComponent))
+                return;
+
+            if (scannerComponent.BodyContainer.ContainedEntity != null)
+                return;
+
+            if (!HasComp<BodyComponent>(to_insert))
+                return;
+
+            _containerSystem.Insert(to_insert, scannerComponent.BodyContainer);
+            UpdateAppearance(uid, scannerComponent);
+        }
+
+        public void EjectBody(EntityUid uid, TelepodComponent? scannerComponent)
+        {
+            if (!Resolve(uid, ref scannerComponent))
+                return;
+
+            if (scannerComponent.BodyContainer.ContainedEntity is not { Valid: true } contained)
+                return;
+
+            _containerSystem.Remove(contained, scannerComponent.BodyContainer);
+            _climbSystem.ForciblySetClimbing(contained, uid);
+            UpdateAppearance(uid, scannerComponent);
         }
 
         /*private void OnPortDisconnected(EntityUid uid, TelepodComponent component, PortDisconnectedEvent args)
@@ -160,6 +204,7 @@ namespace Content.Server.Teleportation
             }
             _cloningConsoleSystem.UpdateUserInterface(component.ConnectedConsole.Value, console);
         }*/
+
         private TelepodStatus GetStatus(EntityUid uid, TelepodComponent scannerComponent)
         {
             if (this.IsPowered(uid, EntityManager))
@@ -223,34 +268,6 @@ namespace Content.Server.Teleportation
             }
         }
 
-        public void InsertBody(EntityUid uid, EntityUid to_insert, TelepodComponent? scannerComponent)
-        {
-            if (!Resolve(uid, ref scannerComponent))
-                return;
-
-            if (scannerComponent.BodyContainer.ContainedEntity != null)
-                return;
-
-            if (!HasComp<BodyComponent>(to_insert))
-                return;
-
-            _containerSystem.Insert(to_insert, scannerComponent.BodyContainer);
-            UpdateAppearance(uid, scannerComponent);
-        }
-
-        public void EjectBody(EntityUid uid, TelepodComponent? scannerComponent)
-        {
-            if (!Resolve(uid, ref scannerComponent))
-                return;
-
-            if (scannerComponent.BodyContainer.ContainedEntity is not { Valid: true } contained)
-                return;
-
-            _containerSystem.Remove(contained, scannerComponent.BodyContainer);
-            _climbSystem.ForciblySetClimbing(contained, uid);
-            UpdateAppearance(uid, scannerComponent);
-        }
-
         /*private void OnRefreshParts(EntityUid uid, TelepodComponent component, RefreshPartsEvent args)
         {
             var ratingFail = args.PartRatings[component.MachinePartCloningFailChance];
@@ -262,5 +279,24 @@ namespace Content.Server.Teleportation
         {
             args.AddPercentageUpgrade("medical-scanner-upgrade-cloning", component.CloningFailChanceMultiplier);
         }*/
+
+        private void OnToggleInterface(EntityUid uid, TelepodComponent component, AfterActivatableUIOpenEvent args)
+        {
+            UpdateUserInterface(uid, component);
+        }
+
+        private void UpdateUserInterface(EntityUid uid, TelepodComponent? component = null)
+        {
+            if (!Resolve(uid, ref component))
+                return;
+
+            var isBodyInserted = component.BodyContainer.ContainedEntity != null;
+            var canSend = isBodyInserted; /*&&
+                          component.DestinationFaxAddress != null &&
+                          component.SendTimeoutRemaining <= 0 &&
+                          component.InsertingTimeRemaining <= 0;*/
+            var state = new TelepodUiState(component.FaxName, component.KnownTelepods, canSend, isBodyInserted, component.DestinationFaxAddress);
+            _userInterface.SetUiState(uid, TelepodUiKey.Key, state);
+        }
     }
 }
