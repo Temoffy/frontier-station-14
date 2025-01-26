@@ -35,6 +35,7 @@ using Robust.Shared.Audio.Systems;
 using Content.Server.Administration.Logs; // Frontier
 using Content.Shared.Database; // Frontier
 using Content.Shared._NF.Bank.BUI; // Frontier
+using Content.Server._NF.Contraband.Systems; // Frontier
 
 namespace Content.Server.VendingMachines
 {
@@ -47,12 +48,14 @@ namespace Content.Server.VendingMachines
         [Dependency] private readonly ThrowingSystem _throwingSystem = default!;
         [Dependency] private readonly IGameTiming _timing = default!;
         [Dependency] private readonly SpeakOnUIClosedSystem _speakOnUIClosed = default!;
+        [Dependency] private readonly SharedPointLightSystem _light = default!;
 
         [Dependency] private readonly IPrototypeManager _prototypeManager = default!; // Frontier
         [Dependency] private readonly SharedAudioSystem _audioSystem = default!; // Frontier
         [Dependency] private readonly BankSystem _bankSystem = default!; // Frontier
         [Dependency] private readonly PopupSystem _popupSystem = default!; // Frontier
         [Dependency] private readonly IAdminLogManager _adminLogger = default!; // Frontier
+        [Dependency] private readonly ContrabandTurnInSystem _contraband = default!; // Frontier
 
         private const float WallVendEjectDistanceFromWall = 1f;
 
@@ -420,6 +423,12 @@ namespace Content.Server.VendingMachines
                 finalState = VendingMachineVisualState.Off;
             }
 
+            if (_light.TryGetLight(uid, out var pointlight))
+            {
+                var lightState = finalState != VendingMachineVisualState.Broken && finalState != VendingMachineVisualState.Off;
+                _light.SetEnabled(uid, lightState, pointlight);
+            }
+
             _appearanceSystem.SetData(uid, VendingMachineVisuals.VisualState, finalState);
         }
 
@@ -506,6 +515,8 @@ namespace Content.Server.VendingMachines
             }
 
             var ent = Spawn(vendComponent.NextItemToEject, spawnCoordinates);
+
+            _contraband.ClearContrabandValue(ent); // Frontier
 
             if (vendComponent.ThrowNextItem)
             {

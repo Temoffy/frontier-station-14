@@ -27,7 +27,7 @@
   - type: BluespaceErrorRule
     groups:
       vgroid: !type:DungeonSpawnGroup
-        nameDataset: names_borer
+        nameDataset: NamesBorer
         minimumDistance: 1500
         maximumDistance: 2500
         addComponents: &dungeonComponents
@@ -39,6 +39,9 @@
           angularDamping: 999999
           linearDamping: 999999
         - type: LinkedLifecycleGridParent
+        - type: ProtectedGrid
+          preventArtifactTriggers: true
+        - type: PreventPilot
         protos:
         - NFVGRoidBasalt
 
@@ -50,7 +53,7 @@
   - type: BluespaceErrorRule
     groups:
       vgroid: !type:DungeonSpawnGroup
-        nameDataset: names_borer
+        nameDataset: NamesBorer
         minimumDistance: 1500
         maximumDistance: 2500
         addComponents: *dungeonComponents
@@ -65,7 +68,7 @@
   - type: BluespaceErrorRule
     groups:
       vgroid: !type:DungeonSpawnGroup
-        nameDataset: names_borer
+        nameDataset: NamesBorer
         minimumDistance: 1500
         maximumDistance: 2500
         addComponents: *dungeonComponents
@@ -80,7 +83,7 @@
   - type: BluespaceErrorRule
     groups:
       vgroid: !type:DungeonSpawnGroup
-        nameDataset: names_borer
+        nameDataset: NamesBorer
         minimumDistance: 1500
         maximumDistance: 2500
         addComponents: *dungeonComponents
@@ -95,7 +98,7 @@
   - type: BluespaceErrorRule
     groups:
       vgroid: !type:DungeonSpawnGroup
-        nameDataset: names_borer
+        nameDataset: NamesBorer
         minimumDistance: 1500
         maximumDistance: 2500
         addComponents: *dungeonComponents

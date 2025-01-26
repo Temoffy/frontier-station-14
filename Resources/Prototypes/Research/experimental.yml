@@ -70,7 +70,7 @@
   cost: 7500
   recipeUnlocks:
   - ClothingShoesBootsMagSci
-  - ClothingShoesBootsMoon
+  - NFClothingShoesBootsMoon # Frontier ClothingShoesBootsMoon<NFClothingShoesBootsMoon
 
 - type: technology
   id: AnomalyCoreHarnessing
@@ -116,7 +116,7 @@
   id: AdvancedAnomalyResearch
   name: research-technology-advanced-anomaly-research
   icon:
-    sprite: Structures/Machines/anomaly_sync.rsi
+    sprite: Objects/Weapons/Guns/Revolvers/chimp.rsi
     state: base
   discipline: Experimental
   tier: 2
